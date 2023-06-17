@@ -27,24 +27,10 @@ def get_etf_returns(etf_name,
     # df = df.rename(by=col, {'return': etf_name})
     return df
 df_etf_returns=get_etf_returns('BND','log','Adj Close')
+#def calculate_squared_returns(self):
+    #self_data['squared_returns'] = self_data['returns'] ** 2
+df_squared_returns=df_etf_returns**2
 
-def calculate_ewma_variance(df_etf_returns, decay_factor, window):
-    ewma = df_etf_returns.ewm(span=window, min_periods=window).var(decay_factor)
-    return ewma
-
-# Assuming you have downloaded the ETF historical price data and stored it in a DataFrame called df_etf
-# You can calculate the EWMA variance with the given decay factors and window size:
-ewma_0_94 = calculate_ewma_variance(df_etf_returns, 0.94, 100)
-ewma_0_97 = calculate_ewma_variance(df_etf_returns, 0.97, 100)
-
-# Plotting the results
-import matplotlib.pyplot as plt
-
-plt.plot(ewma_0_94, label='EWMA Variance (0.94)')
-plt.plot(ewma_0_97, label='EWMA Variance (0.97)')
-plt.legend()
-plt.xlabel('Date')
-plt.ylabel('Variance')
-plt.title('EWMA Variance of ETF Returns')
-plt.show()
-print(ewma_0_94)
+df_etf_returns.rename(columns={'BND': 'returns'}, inplace=True)
+df_squared_returns=df_etf_returns.dropna(inplace=True)
+print(df_etf_returns)
