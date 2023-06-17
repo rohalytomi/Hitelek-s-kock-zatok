@@ -1,78 +1,87 @@
 import pandas as pd
-from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import mean_squared_error
 import numpy as np
-import os
-bnd = 'BND'
-dba = 'DBA'
-weights = {'dba':0.5, 'bnd':0.5}
-conf = [0.95]
-def read_etf_file(etf):
-    filename = os.path.join(etf + '.csv')
-    df = pd.read_csv(filename, index_col=0)
-    df.index = pd.to_datetime(df.index)
-    return df
-
-def get_etf_returns(etf_name,
-    return_type='log', fieldname='Adj Close'):
-    df = read_etf_file(etf_name)
-    df = df[[fieldname]]
-    df['shifted'] = df.shift(1)
-    if return_type=='log':
-        df['return'] = np.log(df[fieldname]/df['shifted'])
-    if return_type=='simple':
-        df['return'] = df[fieldname]/df['shifted']-1
-    # restrict df to result col
-    df = df[['return']]
-    # rename column
-    df.columns = [etf_name]
-    # df = df.rename(by=col, {'return': etf_name})
-    return df
-df_etf=get_etf_returns('BND','log','Adj Close')
-df_etf=df_etf.dropna(inplace=True)
-df_etf=pd.DataFrame(df_etf, columns=['returns'])
-df_etf.rename(columns={'BND': 'returns'}, inplace=True)
-
-class VariancePredictionModel:
-    def __init__(self, data, window_size):
-        self.data = data
-        self.window_size = window_size
-
-    def calculate_squared_returns(self):
-        self.data['squared_returns'] = self.data['returns'] ** 2
-
-    def create_lagged_returns(self):
-        for i in range(1, self.window_size + 1):
-            self.data[f'lag_{i}'] = self.data['returns'].shift(i)
-
-    def predict_variance(self):
-        X = pd.DataFrame()
-        for lag in range(1, self.window_size + 1):
-            X[f'Lagged_Returns_{lag}'] = self.data[f'lag_{lag}']
-        X = X[self.window_size:]
-        y = self.data['squared_returns'][self.window_size:]
-
-        tscv = TimeSeriesSplit(n_splits=5)
-        mse_scores = []
-        for train_index, test_index in tscv.split(X):
-            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-
-            model = LinearRegression()
-            model.fit(X_train, y_train)
-            y_pred = model.predict(X_test)
-            mse_scores.append(mean_squared_error(y_test, y_pred))
-
-        average_mse = sum(mse_scores) / len(mse_scores)
-        return average_mse
+from sklearn.model_selection import KFold
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
 
 
-# Assuming you have downloaded the ETF historical price data and stored it in a DataFrame called df_etf
-model = VariancePredictionModel(df_etf, window_size=20)
-model.calculate_squared_returns()
-model.create_lagged_returns()
-mse = model.predict_variance()
+def create_data():
+    window_size = 20
+    filepath = "BND.csv"
+    data = pd.read_csv(filepath, parse_dates=['Date'], index_col='Date')
+    data['returns'] = np.log(data['Adj Close']).diff()
+    data['squared_returns'] = data['returns'] ** 2
+    cols = []
+    for i in range(1, window_size + 1):
+        col = f'lag_{i}'
+        data[col] = data['squared_returns'].shift(i)
+        cols.append(col)
+    data.dropna(inplace=True)
+    X = np.array(data[cols])
+    y = np.array(data['squared_returns'])
+    return X, y
 
-#print(f"Mean Squared Error (MSE): {mse}")
-print(df_etf)
+
+def create_polynomial_model(degree):
+    model = LinearRegression()
+    return f"Linear Regression (Degree {degree})", model
+
+
+def train_and_evaluate_model(model, X_train, y_train, X_val, y_val):
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_val)
+    mse = mean_squared_error(y_val, y_pred)
+    return model, mse
+
+
+def print_coeffs(label, model):
+    print(label, model.coef_, model.intercept_)
+
+
+def cross_validate(X, y, n_splits=5, from_degree=1, to_degree=10):
+    degrees = range(from_degree, to_degree + 1)
+    kf = KFold(n_splits=n_splits)
+    results = {}
+    best_model = None
+    best_degree = None
+    best_mse = np.inf
+    np.set_printoptions(precision=4)
+    for degree in degrees:
+        name, model = create_polynomial_model(degree)
+        mse_sum = 0
+        for train_idx, val_idx in kf.split(X):
+            X_train, y_train = X[train_idx], y[train_idx]
+            X_val, y_val = X[val_idx], y[val_idx]
+            model, mse = train_and_evaluate_model(model, X_train, y_train, X_val, y_val)
+            print_coeffs("Coefficients: ", model)
+            mse_sum += mse
+        avg_mse = mse_sum / n_splits
+        results[degree] = avg_mse
+        print(f"for degree: {degree}, MSE: {avg_mse}")
+        model.fit(X, y)
+        print_coeffs("Final Coefficients: ", model)
+        if avg_mse < best_mse:
+            best_mse = avg_mse
+            best_degree = degree
+            best_model = model
+    print(f"Best model: degree={best_degree}, MSE={best_mse}")
+    print_coeffs("Coefficients for best model: ", best_model)
+
+    # Plot the evolution of model performance
+    degrees = list(results.keys())
+    mses = list(results.values())
+    plt.plot(degrees, mses, marker='o')
+    plt.xlabel('Degree of Polynomial Regression')
+    plt.ylabel('Mean Squared Error')
+    plt.title('Evolution of Model Performance')
+    plt.xticks(degrees)
+    plt.grid(True)
+    plt.show()
+
+    return best_model
+
+
+# Main code
+X, y = create_data()
+best_model = cross_validate(X, y, n_splits=5, from_degree=1, to_degree=20)
