@@ -38,7 +38,7 @@ ewma_0_97 = calculate_ewma_variance(df_etf_returns, 0.97, 100)
 import matplotlib.pyplot as plt
 
 plt.plot(ewma_0_94, label='EWMA Variance (0.94)')
-# plt.plot(ewma_0_97, label='EWMA Variance (0.97)')
+plt.plot(ewma_0_97, label='EWMA Variance (0.97)')
 plt.legend()
 plt.xlabel('Date')
 plt.ylabel('Variance')
