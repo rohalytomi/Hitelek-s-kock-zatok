@@ -2,9 +2,14 @@ import pandas as pd
 import numpy as np
 import os
 from scipy.stats import norm
+import matplotlib.pyplot as plt
 bnd = 'BND'
 dba = 'DBA'
-weights = {'dba':0.5, 'bnd':0.5}
+weight_combinations = [
+    {'dba': 0.2, 'bnd': 0.8},
+    {'dba': 0.4, 'bnd': 0.6},
+    {'dba': 0.6, 'bnd': 0.4},
+    {'dba': 0.8, 'bnd': 0.2}]
 conf = [0.95]
 def read_etf_file(etf):
     filename = os.path.join(etf + '.csv')
@@ -76,8 +81,6 @@ def get_portfolio_return_btw_dates(d_weights,
     todate = pd.to_datetime(to_date)
     filtered_df = df.loc[fromdate:todate]
     return filtered_df
-
-df_portfolio_returns = get_portfolio_return_btw_dates(weights, '2007-04-16', '2022-12-20')
 
 def subtract_trading_date(actual_date, x):
     date = pd.to_datetime(actual_date)
@@ -171,10 +174,30 @@ def calculate_historical_var(df_portfolio_returns, alpha):
     #df_result_amount = df_result_ret * 1000
     return df_result_ret #, df_result_amount
 
-#df_returns = pd.DataFrame({'returns': np.arange(-0.05, 0.06, 0.01)})
+var_values = []
 
-#print(calculate_historical_var(df_returns, conf))
-
+# for i, weights in enumerate(weight_combinations):
+#     df_portfolio_returns = get_portfolio_return_btw_dates(weights, '2007-04-16', '2022-12-20')
+#     df_var_hist = calculate_historical_var(df_portfolio_returns, conf)
+#
+#     var_value = df_var_hist.iloc[0, 0]  # Get the VaR value at the first date
+#
+#     var_values.append(var_value)
+#
+#     print(f"VaR for weights {i + 1}: {var_value}")
+#
+# # Plotting
+# plt.figure(figsize=(10, 6))
+# for i, var_value in enumerate(var_values):
+#     plt.bar(i + 1, var_value, label=f'Weights {i + 1}')
+#
+# plt.xlabel('Weight Combination')
+# plt.ylabel('Portfolio VaR')
+# plt.title('Comparison of Portfolio VaR for Different Weight Combinations')
+# plt.xticks(range(1, len(weight_combinations) + 1), [f'Weights {i + 1}' for i in range(len(weight_combinations))])
+# plt.legend()
+# plt.grid(True)
+# plt.show()
 def calculate_covariance_matrix(volatility, corr):
     cov_xy = volatility[0] * volatility[1] * corr
     cov_matrix = np.array([[volatility[0] ** 2, cov_xy], [cov_xy, volatility[1] ** 2]])
@@ -194,12 +217,34 @@ def simulated_returns(expected_return, volatility, correlation, numOfSim):
 
 returns_bnd = get_etf_returns('bnd','log','Adj Close')
 returns_dba = get_etf_returns('dba','log','Adj Close')
-df_returns = get_joined_returns(weights,'2007-04-10', '2022-12-20')
-corr_matrix = df_returns.corr()
 
-expected_return = [float(returns_bnd.mean(axis=0)), float(returns_dba.mean(axis=0))]
-volatility = [float(returns_bnd.std(axis=0)), float(returns_dba.std(axis=0))]
-correlation = corr_matrix.iloc[0,1]
+volatility = [float(returns_bnd.std().iloc[0]), float(returns_dba.std().iloc[0])]
+weights_vol = {
+    'dba': 1 / volatility[1],  # Inverse proportional to volatility
+    'bnd': 1 / volatility[0]   # Inverse proportional to volatility
+}
+weights_sum = sum(weights_vol.values())
+weights_vol = {k: v / weights_sum for k, v in weights_vol.items()}  # Normalize weights to sum up to 1
+
+df_returns = get_joined_returns(weights_vol, '2007-04-10', '2022-12-20')
+corr_matrix = df_returns.corr()
+expected_return = [float(returns_bnd.mean().iloc[0]), float(returns_dba.mean().iloc[0])]
+# correlation = corr_matrix.iloc[0, 1]
+correlation_values = [-0.9, -0.5, 0, 0.5, 0.9]
 numOfSim = 10000
+
+for correlation in correlation_values:
+    simulated_ret = simulated_returns(expected_return, volatility, correlation, numOfSim)
+    simulated_ret_bnd = simulated_ret[:, 0]
+    simulated_ret_dba = simulated_ret[:, 1]
+
+    plt.scatter(simulated_ret_bnd, simulated_ret_dba, alpha=0.5, label=f"Correlation: {correlation}")
+
+plt.xlabel('BND Returns')
+plt.ylabel('DBA Returns')
+plt.legend()
+plt.title('Simulated Returns for Different Correlation Assumptions')
+plt.grid(True)
+plt.show()
 print(simulated_returns(expected_return, volatility, correlation, numOfSim))
-#print(returns_bnd.mean(axis=0))
+print(returns_bnd.mean().iloc[0])
