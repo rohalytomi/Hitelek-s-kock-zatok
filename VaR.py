@@ -233,17 +233,31 @@ expected_return = [float(returns_bnd.mean().iloc[0]), float(returns_dba.mean().i
 correlation_values = [-0.9, -0.5, 0, 0.5, 0.9]
 numOfSim = 10000
 
+# for correlation in correlation_values:
+#     simulated_ret = simulated_returns(expected_return, volatility, correlation, numOfSim)
+#     simulated_ret_bnd = simulated_ret[:, 0]
+#     simulated_ret_dba = simulated_ret[:, 1]
+#
+#     plt.scatter(simulated_ret_bnd, simulated_ret_dba, alpha=0.5, label=f"Correlation: {correlation}")
+#
+# plt.xlabel('BND Returns')
+# plt.ylabel('DBA Returns')
+# plt.legend()
+# plt.title('Simulated Returns for Different Correlation Assumptions')
+# plt.grid(True)
+# plt.show()
+var_values_correlation = []
+
 for correlation in correlation_values:
     simulated_ret = simulated_returns(expected_return, volatility, correlation, numOfSim)
-    simulated_ret_bnd = simulated_ret[:, 0]
-    simulated_ret_dba = simulated_ret[:, 1]
+    portfolio_returns = np.dot(simulated_ret, np.array([weights_vol['bnd'], weights_vol['dba']]))
+    var_value = np.percentile(portfolio_returns, 5)
+    var_values_correlation.append(var_value)
 
-    plt.scatter(simulated_ret_bnd, simulated_ret_dba, alpha=0.5, label=f"Correlation: {correlation}")
-
-plt.xlabel('BND Returns')
-plt.ylabel('DBA Returns')
-plt.legend()
-plt.title('Simulated Returns for Different Correlation Assumptions')
+plt.plot(correlation_values, var_values_correlation, marker='o')
+plt.xlabel('Correlation')
+plt.ylabel('Value at Risk (VaR)')
+plt.title('VaR vs. Correlation')
 plt.grid(True)
 plt.show()
 print(simulated_returns(expected_return, volatility, correlation, numOfSim))
